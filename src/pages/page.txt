@@ -1,0 +1,72 @@
+Simple logout ideas for demo
+
+Best option for this project:
+Use a small `localStorage` flag.
+
+Why this is simplest:
+- No backend needed
+- Very little code
+- Works even after refresh
+- Easy to explain in demo
+
+Recommended flow:
+1. On login success, save `localStorage.setItem("isLoggedIn", "true")`
+2. On logout, remove it with `localStorage.removeItem("isLoggedIn")`
+3. Redirect user to `/`
+4. Optional: protect dashboard routes using `<Navigate />`
+
+Minimal code idea:
+
+In `Login.jsx` inside `handleLogin`:
+```jsx
+localStorage.setItem("isLoggedIn", "true");
+navigate("/dashboard");
+```
+
+In `Sidebar.jsx` add a logout button:
+```jsx
+import { useNavigate } from "react-router-dom";
+
+const navigate = useNavigate();
+
+const handleLogout = () => {
+  localStorage.removeItem("isLoggedIn");
+  navigate("/");
+};
+```
+
+Button:
+```jsx
+<button onClick={handleLogout}>Logout</button>
+```
+
+Optional route protection in `App.jsx`:
+```jsx
+import { Navigate } from "react-router-dom";
+
+const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+```
+
+Example:
+```jsx
+<Route
+  path="/dashboard"
+  element={isLoggedIn ? <Dashboard /> : <Navigate to="/" />}
+/>
+```
+
+Even simpler demo option:
+- Skip route protection
+- Just add logout button in sidebar
+- On click: clear storage and go to login page
+
+Another option:
+Use `sessionStorage` instead of `localStorage`
+
+Difference:
+- `localStorage`: stays after browser refresh/reopen
+- `sessionStorage`: clears when tab closes
+
+Best demo recommendation:
+Add `localStorage` login/logout first.
+If needed, later we can make a tiny `ProtectedRoute` component to avoid repeating code in every route.
