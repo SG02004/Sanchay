@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import BrandLogo from "./Brandlogo";
+import BrandLogo from "./BrandLogo";
 import {
   LayoutDashboard,
   Receipt,

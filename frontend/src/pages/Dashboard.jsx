@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
-import SummaryCard from "../components/Summarycard";
+import SummaryCard from "../components/SummaryCard";
 import PieChartCard from "../components/PieChartCard";
 import API from "../services/api";
 import {

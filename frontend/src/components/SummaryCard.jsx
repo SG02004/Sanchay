@@ -1,6 +1,6 @@
 const SummaryCard = ({ title, amount, color }) => {
   return (
-    <div className="rounded-2xl bg-white shadow p-6">
+    <div className="rounded-2xl bg-white p-6 shadow">
       <h3 className="text-slate-500">{title}</h3>
 
       <h1 className={`mt-4 text-3xl font-bold ${color}`}>
