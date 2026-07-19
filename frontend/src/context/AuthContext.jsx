@@ -49,8 +49,18 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Merge updated fields (e.g. a new name) into the stored user + localStorage,
+  // keeping the existing JWT token so the session stays valid.
+  const updateUser = (fields) => {
+    setUser((current) => {
+      const merged = { ...current, ...fields };
+      localStorage.setItem("user", JSON.stringify(merged));
+      return merged;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

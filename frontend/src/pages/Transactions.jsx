@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Download, Filter, Pencil } from "lucide-react";
 import Layout from "../components/Layout";
 import API from "../services/api";
+import { useToast } from "../context/ToastContext";
 import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
@@ -9,23 +10,33 @@ import {
   formatDate,
 } from "../lib/finance";
 
+const emptyTransaction = {
+  category: "",
+  amount: "",
+  description: "",
+  date: "",
+  type: "Expense",
+};
+
 const Transactions = () => {
+  const toast = useToast();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
-  const [newTransaction, setNewTransaction] = useState({
-    category: "",
-    amount: "",
-    description: "",
-    date: "",
-    type: "Expense",
-  });
+  const [filterType, setFilterType] = useState("All");
+  const [editingId, setEditingId] = useState(""); // "" = adding, otherwise = editing this id
+  const [newTransaction, setNewTransaction] = useState(emptyTransaction);
 
   const activeCategories =
     newTransaction.type === "Income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+
+  const filteredTransactions =
+    filterType === "All"
+      ? transactions
+      : transactions.filter((t) => t.type === filterType);
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -39,35 +50,66 @@ const Transactions = () => {
         setLoading(false);
       }
     };
-
     fetchTransactions();
   }, []);
+
+  // Open the modal in "Add" mode
+  const openAddModal = () => {
+    setEditingId("");
+    setNewTransaction(emptyTransaction);
+    setShowModal(true);
+  };
+
+  // Open the modal in "Edit" mode, pre-filled with the chosen row
+  const openEditModal = (item) => {
+    setEditingId(item._id);
+    setNewTransaction({
+      category: item.category,
+      amount: String(item.amount),
+      description: item.description || "",
+      // <input type="date"> needs YYYY-MM-DD
+      date: new Date(item.date).toISOString().slice(0, 10),
+      type: item.type,
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId("");
+    setNewTransaction(emptyTransaction);
+  };
 
   const handleSave = async () => {
     if (!newTransaction.category || !newTransaction.amount || !newTransaction.date) {
       setError("Please fill category, amount, and date.");
+      toast.error("Please fill category, amount, and date.");
       return;
     }
-
     setSaving(true);
     try {
-      const { data } = await API.post("/transactions", {
-        ...newTransaction,
-        amount: Number(newTransaction.amount),
-      });
+      const payload = { ...newTransaction, amount: Number(newTransaction.amount) };
 
-      setTransactions((current) => [data, ...current]);
-      setNewTransaction({
-        category: "",
-        amount: "",
-        description: "",
-        date: "",
-        type: "Expense",
-      });
-      setShowModal(false);
+      if (editingId) {
+        // EDIT — send a PUT and swap the updated row into the list
+        const { data } = await API.put(`/transactions/${editingId}`, payload);
+        setTransactions((current) =>
+          current.map((item) => (item._id === editingId ? data : item))
+        );
+        toast.success("Transaction updated");
+      } else {
+        // ADD — send a POST and put the new row on top
+        const { data } = await API.post("/transactions", payload);
+        setTransactions((current) => [data, ...current]);
+        toast.success("Transaction added");
+      }
+
+      closeModal();
       setError("");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create transaction.");
+      const msg = err.response?.data?.message || "Failed to save transaction.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -79,11 +121,36 @@ const Transactions = () => {
       await API.delete(`/transactions/${id}`);
       setTransactions((current) => current.filter((item) => item._id !== id));
       setError("");
+      toast.success("Transaction deleted");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete transaction.");
+      const msg = err.response?.data?.message || "Failed to delete transaction.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setDeletingId("");
     }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Date", "Category", "Description", "Amount", "Type"];
+    const rows = transactions.map((t) => [
+      new Date(t.date).toLocaleDateString(),
+      t.category,
+      t.description || "",
+      t.amount,
+      t.type,
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((val) => `"${val}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sanchay_transactions.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("CSV exported");
   };
 
   return (
@@ -93,18 +160,27 @@ const Transactions = () => {
           <h1 className="text-3xl font-bold text-slate-800">
             Transactions
           </h1>
-
           <p className="mt-2 text-slate-500">
             View and manage all your transactions.
           </p>
         </div>
-
-        <button
-          onClick={() => setShowModal(true)}
-          className="rounded-xl bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-700"
-        >
-          + Add Transaction
-        </button>
+        <div className="flex items-center gap-3">
+          {transactions.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Download size={18} />
+              Export CSV
+            </button>
+          )}
+          <button
+            onClick={openAddModal}
+            className="rounded-xl bg-emerald-600 px-5 py-3 font-medium text-white hover:bg-emerald-700"
+          >
+            + Add Transaction
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -112,6 +188,21 @@ const Transactions = () => {
           {error}
         </div>
       )}
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Filter size={16} className="text-slate-400" />
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="All">All Types</option>
+            <option value="Income">Income</option>
+            <option value="Expense">Expense</option>
+          </select>
+        </div>
+      </div>
 
       <div className="mt-8 overflow-x-auto rounded-2xl bg-white p-6 shadow">
         <table className="min-w-full">
@@ -125,7 +216,6 @@ const Transactions = () => {
               <th className="text-right">Action</th>
             </tr>
           </thead>
-
           <tbody>
             {loading ? (
               <tr>
@@ -133,14 +223,14 @@ const Transactions = () => {
                   Loading transactions...
                 </td>
               </tr>
-            ) : transactions.length === 0 ? (
+            ) : filteredTransactions.length === 0 ? (
               <tr>
                 <td colSpan="6" className="py-8 text-center text-slate-400">
                   No transactions yet.
                 </td>
               </tr>
             ) : (
-              transactions.map((item) => (
+              filteredTransactions.map((item) => (
                 <tr
                   key={item._id}
                   className="border-b last:border-0 hover:bg-slate-50"
@@ -165,13 +255,23 @@ const Transactions = () => {
                     </span>
                   </td>
                   <td className="text-right">
-                    <button
-                      onClick={() => handleDelete(item._id)}
-                      disabled={deletingId === item._id}
-                      className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
+                        title="Edit"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item._id)}
+                        disabled={deletingId === item._id}
+                        className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -184,9 +284,8 @@ const Transactions = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="mb-6 text-2xl font-bold">
-              Add Transaction
+              {editingId ? "Edit Transaction" : "Add Transaction"}
             </h2>
-
             <div className="space-y-4">
               <select
                 value={newTransaction.type}
@@ -202,7 +301,6 @@ const Transactions = () => {
                 <option value="Expense">Expense</option>
                 <option value="Income">Income</option>
               </select>
-
               <select
                 value={newTransaction.category}
                 onChange={(e) =>
@@ -220,7 +318,6 @@ const Transactions = () => {
                   </option>
                 ))}
               </select>
-
               <input
                 type="number"
                 min="0"
@@ -234,7 +331,6 @@ const Transactions = () => {
                 }
                 className="w-full rounded-xl border border-slate-200 p-3"
               />
-
               <input
                 type="date"
                 value={newTransaction.date}
@@ -246,7 +342,6 @@ const Transactions = () => {
                 }
                 className="w-full rounded-xl border border-slate-200 p-3"
               />
-
               <input
                 type="text"
                 placeholder="Description (optional)"
@@ -260,21 +355,19 @@ const Transactions = () => {
                 className="w-full rounded-xl border border-slate-200 p-3"
               />
             </div>
-
             <div className="mt-6 flex justify-end gap-3">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
                 className="rounded-xl bg-slate-200 px-5 py-2"
               >
                 Cancel
               </button>
-
               <button
                 onClick={handleSave}
                 disabled={saving}
                 className="rounded-xl bg-emerald-600 px-5 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Save"}
+                {saving ? "Saving..." : editingId ? "Update" : "Save"}
               </button>
             </div>
           </div>

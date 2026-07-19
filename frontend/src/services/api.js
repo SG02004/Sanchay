@@ -17,4 +17,17 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
+// RESPONSE INTERCEPTOR — runs after EVERY API response
+// Catches any HTTP errors globally and logs them
+// Individual components can still catch errors in their own try/catch
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const errorMessage =
+      error.response?.data?.message || error.message || "Something went wrong";
+    console.error("API Error:", errorMessage);
+    return Promise.reject(error);
+  }
+);
+
 export default API;

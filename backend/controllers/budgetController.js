@@ -68,4 +68,49 @@ const createBudget = async (req, res) => {
   }
 };
 
-module.exports = { getBudgets, createBudget };
+// PUT /api/budget/:id — update a budget's limit (the "U" in CRUD)
+const updateBudget = async (req, res) => {
+  try {
+    const budget = await Budget.findById(req.params.id);
+
+    if (!budget) {
+      return res.status(404).json({ message: "Budget not found" });
+    }
+
+    // Security check: user can only edit THEIR OWN budgets
+    if (budget.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to edit this budget" });
+    }
+
+    const { limit } = req.body;
+    if (limit !== undefined) budget.limit = limit;
+
+    const updated = await budget.save();
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+// DELETE /api/budget/:id — remove a budget category
+const deleteBudget = async (req, res) => {
+  try {
+    const budget = await Budget.findById(req.params.id);
+
+    if (!budget) {
+      return res.status(404).json({ message: "Budget not found" });
+    }
+
+    // Security check: user can only delete THEIR OWN budgets
+    if (budget.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to delete this budget" });
+    }
+
+    await Budget.findByIdAndDelete(req.params.id);
+    res.json({ message: "Budget deleted" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+module.exports = { getBudgets, createBudget, updateBudget, deleteBudget };

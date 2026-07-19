@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import Layout from "../components/Layout";
 import SummaryCard from "../components/SummaryCard";
 import PieChartCard from "../components/PieChartCard";
@@ -19,6 +20,8 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Budgets that have crossed the 80% warning threshold (for the alert banner)
+  const [budgetAlerts, setBudgetAlerts] = useState([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -38,7 +41,23 @@ const Dashboard = () => {
       }
     };
 
+    // Reuse the /api/budget percentages to surface over-budget warnings.
+    // Any category at or above 80% of its limit becomes an alert.
+    const fetchBudgetAlerts = async () => {
+      try {
+        const { data } = await API.get("/budget");
+        const alerts = (data || [])
+          .filter((b) => b.percentage >= 80)
+          .sort((a, b) => b.percentage - a.percentage);
+        setBudgetAlerts(alerts);
+      } catch {
+        // Non-critical: if budgets fail to load we simply show no alerts.
+        setBudgetAlerts([]);
+      }
+    };
+
     fetchDashboard();
+    fetchBudgetAlerts();
   }, []);
 
   const savingsRate =
@@ -59,34 +78,75 @@ const Dashboard = () => {
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Income"
-          amount={loading ? "Loading..." : formatCompactCurrency(dashboard.totalIncome)}
-          color="text-green-600"
-        />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "0ms" }}>
+          <SummaryCard
+            title="Income"
+            amount={loading ? "Loading..." : formatCompactCurrency(dashboard.totalIncome)}
+            color="text-green-600"
+          />
+        </div>
 
-        <SummaryCard
-          title="Expense"
-          amount={loading ? "Loading..." : formatCompactCurrency(dashboard.totalExpense)}
-          color="text-red-500"
-        />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "75ms" }}>
+          <SummaryCard
+            title="Expense"
+            amount={loading ? "Loading..." : formatCompactCurrency(dashboard.totalExpense)}
+            color="text-red-500"
+          />
+        </div>
 
-        <SummaryCard
-          title="Balance"
-          amount={loading ? "Loading..." : formatCompactCurrency(dashboard.balance)}
-          color="text-blue-600"
-        />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "150ms" }}>
+          <SummaryCard
+            title="Balance"
+            amount={loading ? "Loading..." : formatCompactCurrency(dashboard.balance)}
+            color="text-blue-600"
+          />
+        </div>
 
-        <SummaryCard
-          title="Savings Rate"
-          amount={loading ? "Loading..." : `${Math.round(savingsRate)}%`}
-          color="text-emerald-600"
-        />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: "225ms" }}>
+          <SummaryCard
+            title="Savings Rate"
+            amount={loading ? "Loading..." : `${Math.round(savingsRate)}%`}
+            color="text-emerald-600"
+          />
+        </div>
       </div>
 
       {error && (
         <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
+        </div>
+      )}
+
+      {budgetAlerts.length > 0 && (
+        <div className="mt-8 space-y-3">
+          {budgetAlerts.map((b, index) => {
+            const over = b.percentage >= 100;
+            return (
+              <div
+                key={b._id}
+                className={`animate-in fade-in slide-in-from-bottom-2 fill-mode-both flex items-start gap-3 rounded-2xl border px-5 py-4 ${
+                  over
+                    ? "border-red-200 bg-red-50"
+                    : "border-amber-200 bg-amber-50"
+                }`}
+                style={{ animationDelay: `${index * 75}ms` }}
+              >
+                <AlertTriangle
+                  className={over ? "text-red-500" : "text-amber-500"}
+                  size={20}
+                />
+                <p className={`text-sm font-medium ${over ? "text-red-700" : "text-amber-700"}`}>
+                  {over
+                    ? `You've exceeded your ${b.category} budget — spent ${formatCurrency(
+                        b.spent
+                      )} of ${formatCurrency(b.limit)} (${b.percentage}%).`
+                    : `You've used ${b.percentage}% of your ${b.category} budget — ${formatCurrency(
+                        b.spent
+                      )} of ${formatCurrency(b.limit)}.`}
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
 

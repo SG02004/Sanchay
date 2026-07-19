@@ -47,9 +47,9 @@ const Insights = () => {
         Insights
       </h1>
 
-      <p className="mt-2 text-slate-500">
+      {/* <p className="mt-2 text-slate-500">
         Reused dashboard analytics for your demo charts.
-      </p>
+      </p> */}
 
       {error && (
         <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">

@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Transaction = require("../models/Transaction");
 
 // GET /api/admin/users — list all users (admin only)
 const getAllUsers = async (req, res) => {
@@ -32,4 +33,38 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, deleteUser };
+// GET /api/admin/stats — get system-wide statistics (admin only)
+const getSystemStats = async (req, res) => {
+  try {
+    const [totalUsers, totalTransactions, amountsByType] = await Promise.all([
+      User.countDocuments(),
+      Transaction.countDocuments(),
+      Transaction.aggregate([
+        {
+          $group: {
+            _id: "$type",
+            total: { $sum: "$amount" },
+          },
+        },
+      ]),
+    ]);
+
+    const totalIncome =
+      amountsByType.find((t) => t._id === "Income")?.total || 0;
+    const totalExpense =
+      amountsByType.find((t) => t._id === "Expense")?.total || 0;
+    const totalVolume = totalIncome + totalExpense;
+
+    res.json({
+      totalUsers,
+      totalTransactions,
+      totalIncome,
+      totalExpense,
+      totalVolume,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+module.exports = { getAllUsers, deleteUser, getSystemStats };

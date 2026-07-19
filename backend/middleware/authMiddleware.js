@@ -20,14 +20,15 @@ const protect = async (req, res, next) => {
       // Find user by ID from token, exclude password from result
       req.user = await User.findById(decoded.id).select("-password");
 
-      next(); // Token valid, user found — continue to the actual route handler
+      return next(); // Token valid, user found — continue to the actual route handler
     } catch (error) {
-      res.status(401).json({ message: "Not authorized, token invalid" });
+      // return stops the function here so we never send a second response below
+      return res.status(401).json({ message: "Not authorized, token invalid" });
     }
   }
 
   if (!token) {
-    res.status(401).json({ message: "Not authorized, no token provided" });
+    return res.status(401).json({ message: "Not authorized, no token provided" });
   }
 };
 

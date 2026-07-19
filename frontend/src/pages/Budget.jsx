@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
+import { Trash2, Pencil, Check, X } from "lucide-react";
 import Layout from "../components/Layout";
 import API from "../services/api";
+import { useToast } from "../context/ToastContext";
 import {
   EXPENSE_CATEGORIES,
   formatCurrency,
 } from "../lib/finance";
 
 const Budget = () => {
+  const toast = useToast();
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+  const [editingId, setEditingId] = useState("");   // which budget is being edited
+  const [editLimit, setEditLimit] = useState("");   // the new limit being typed
   const [form, setForm] = useState({
     category: "",
     limit: "",
@@ -52,6 +58,7 @@ const Budget = () => {
   const handleCreateBudget = async () => {
     if (!form.category || !form.limit) {
       setError("Please select a category and budget limit.");
+      toast.error("Please select a category and budget limit.");
       return;
     }
 
@@ -64,10 +71,58 @@ const Budget = () => {
       setForm({ category: "", limit: "" });
       await refreshBudgets();
       setError("");
+      toast.success("Budget added");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create budget.");
+      const msg = err.response?.data?.message || "Failed to create budget.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Start editing a budget's limit
+  const startEdit = (budget) => {
+    setEditingId(budget._id);
+    setEditLimit(String(budget.limit));
+  };
+
+  const cancelEdit = () => {
+    setEditingId("");
+    setEditLimit("");
+  };
+
+  // Save the edited limit (PUT /api/budget/:id)
+  const handleUpdateLimit = async (id) => {
+    if (!editLimit) {
+      toast.error("Please enter a limit.");
+      return;
+    }
+    try {
+      await API.put(`/budget/${id}`, { limit: Number(editLimit) });
+      await refreshBudgets();
+      cancelEdit();
+      toast.success("Budget updated");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to update budget.";
+      setError(msg);
+      toast.error(msg);
+    }
+  };
+
+  // Delete a budget (DELETE /api/budget/:id)
+  const handleDelete = async (id) => {
+    setDeletingId(id);
+    try {
+      await API.delete(`/budget/${id}`);
+      setBudgets((current) => current.filter((b) => b._id !== id));
+      toast.success("Budget deleted");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to delete budget.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setDeletingId("");
     }
   };
 
@@ -142,6 +197,7 @@ const Budget = () => {
                 : percentage >= 80
                   ? "bg-amber-500"
                   : "bg-emerald-500";
+            const isEditing = editingId === budget._id;
 
             return (
               <div key={budget._id} className="rounded-2xl bg-white p-6 shadow">
@@ -149,9 +205,32 @@ const Budget = () => {
                   <h2 className="font-semibold text-slate-800">
                     {budget.category}
                   </h2>
-                  <span className="text-sm font-medium text-slate-500">
-                    {percentage}%
-                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-500">
+                      {percentage}%
+                    </span>
+
+                    {!isEditing && (
+                      <>
+                        <button
+                          onClick={() => startEdit(budget)}
+                          className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100"
+                          title="Edit limit"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(budget._id)}
+                          disabled={deletingId === budget._id}
+                          className="rounded-lg p-1.5 text-red-500 transition hover:bg-red-50 disabled:opacity-60"
+                          title="Delete budget"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="h-3 overflow-hidden rounded-full bg-slate-100">
@@ -161,14 +240,41 @@ const Budget = () => {
                   />
                 </div>
 
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <p className="text-slate-500">
-                    {formatCurrency(budget.spent)} spent
-                  </p>
-                  <p className="font-semibold text-slate-800">
-                    {formatCurrency(budget.limit)} limit
-                  </p>
-                </div>
+                {isEditing ? (
+                  <div className="mt-4 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={editLimit}
+                      onChange={(e) => setEditLimit(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      placeholder="New limit"
+                    />
+                    <button
+                      onClick={() => handleUpdateLimit(budget._id)}
+                      className="rounded-lg bg-emerald-600 p-2 text-white transition hover:bg-emerald-700"
+                      title="Save"
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="rounded-lg bg-slate-200 p-2 text-slate-600 transition hover:bg-slate-300"
+                      title="Cancel"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center justify-between text-sm">
+                    <p className="text-slate-500">
+                      {formatCurrency(budget.spent)} spent
+                    </p>
+                    <p className="font-semibold text-slate-800">
+                      {formatCurrency(budget.limit)} limit
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })
